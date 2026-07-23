@@ -5,10 +5,10 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// DEFINA UMA SENHA SECRETA PARA O SEU TOKEN
+// Sua chave secreta
 const SEGREDO = 'SUA_CHAVE_SUPER_SECRETA_E_UNICA_123';
 
-// Lista dos seus Addons
+// Lista dos Addons
 const ADDONS = [
   'https://torrentio.strem.fun/brazuca',
   'https://froststream.cloutteam.com',
@@ -24,19 +24,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// Checa a expiração de 30 dias via Token
+// Middleware de verificação de Token
 function verificarAcesso(req, res, next) {
   const token = req.query.token;
 
   if (!token) {
-    return res.status(401).send('Acesso negado: Token não fornecido.');
+    return res.status(401).send('Acesso negado: Token nao fornecido.');
   }
 
   try {
     jwt.verify(token, SEGREDO);
     next();
   } catch (err) {
-    return res.status(403).send('Acesso expirado ou link inválido (30 dias atingidos).');
+    return res.status(403).send('Link invalido ou chave incorreta.');
   }
 }
 
@@ -44,8 +44,8 @@ app.get('/manifest.json', verificarAcesso, (req, res) => {
   res.json({
     id: 'org.meustremio.multiproxy',
     version: '1.0.0',
-    name: 'Meu Proxy Multi-Addon (30 Dias)',
-    description: 'Proxy unificado com expiração de 30 dias',
+    name: 'Meu Proxy Multi-Addon',
+    description: 'Proxy unificado',
     resources: ['stream', 'catalog', 'meta'],
     types: ['movie', 'series', 'anime'],
     catalogs: []
@@ -69,7 +69,7 @@ app.get('/stream/:type/:id.json', verificarAcesso, async (req, res) => {
   });
 
   const results = await Promise.all(requests);
-  results.forEach(streams => {
+  results.forEach((streams) => {
     allStreams = allStreams.concat(streams);
   });
 
@@ -77,5 +77,5 @@ app.get('/stream/:type/:id.json', verificarAcesso, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Servidor proxy rodando na porta ${PORT}`);
+  console.log(`Servidor rodando na porta ${PORT}`);
 });
