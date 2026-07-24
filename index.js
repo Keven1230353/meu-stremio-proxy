@@ -1,34 +1,82 @@
 const express = require('express');
+const axios = require('axios');
 const jwt = require('jsonwebtoken');
+
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-// Sua chave secreta
-const JWT_SECRET = process.env.JWT_SECRET || "SUA_CHAVE_SUPER_SECRETA_E_UNICA_123";
+// DEFINA UMA SENHA SECRETA PARA O SEU TOKEN
+const SEGREDO = 'SUA_CHAVE_SUPER_SECRETA_E_UNICA_123';
 
-app.get('/manifest.json', (req, res) => {
+// Lista dos seus Addons
+const ADDONS = [
+  'https://torrentio.strem.fun/brazuca',
+  'https://froststream.cloutteam.com',
+  'https://comet.elfhosted.com',
+  'https://frostview.cloutteam.com',
+  'https://cyberflix.1337x.b33p.club',
+  'https://anime-kitsu.strem.fun'
+];
+
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+  next();
+});
+
+// Checa a validação e expiração do Token
+function verificarAcesso(req, res, next) {
   const token = req.query.token;
 
   if (!token) {
-    return res.status(401).json({ error: "Token não fornecido" });
+    return res.json({ streams: [] });
   }
 
   try {
-    // O jwt.verify checa a chave E verifica se o 'exp' (tempo) já venceu
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    // Se o token for válido e NÃO tiver expirado, entrega o manifest do Stremio
-    return res.json({
-      id: "org.meustremio.proxy",
-      version: "1.0.0",
-      name: "Meu Proxy Stremio",
-      description: "Addon privado com autenticação",
-      resources: ["catalog", "stream"],
-      types: ["movie", "series"],
-      catalogs: []
-    });
-
+    jwt.verify(token, SEGREDO);
+    next();
   } catch (err) {
-    // Se o token tiver expirado ou for inválido, cai AQUI e bloqueia!
-    return res.status(401).send("Acesso negado: Token expirado ou inválido.");
+    // Retorna a lista vazia para o Stremio entender o bloqueio na hora
+    return res.json({ streams: [] });
   }
+}
+
+app.get('/manifest.json', verificarAcesso, (req, res) => {
+  res.json({
+    id: 'org.meustremio.multiproxy',
+    version: '1.0.0',
+    name: 'Meu Proxy Multi-Addon (30 Dias)',
+    description: 'Proxy unificado com expiração de 30 dias',
+    resources: ['stream', 'catalog', 'meta'],
+    types: ['movie', 'series', 'anime'],
+    catalogs: []
+  });
+});
+
+app.get('/stream/:type/:id.json', verificarAcesso, async (req, res) => {
+  const { type, id } = req.params;
+  let allStreams = [];
+
+  const requests = ADDONS.map(async (baseUrl) => {
+    try {
+      const response = await axios.get(`${baseUrl}/stream/${type}/${id}.json`);
+      if (response.data && response.data.streams) {
+        return response.data.streams;
+      }
+    } catch (e) {
+      return [];
+    }
+    return [];
+  });
+
+  const results = await Promise.all(requests);
+  results.forEach((streams) => {
+    allStreams = allStreams.concat(streams);
+  });
+
+  res.json({ streams: allStreams });
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor proxy rodando na porta ${PORT}`);
 });
