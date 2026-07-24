@@ -6,21 +6,29 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // DEFINA UMA SENHA SECRETA PARA O SEU TOKEN
+// Lembre-se de usar exatamente essa mesma palavra no jwt.io no campo VERIFY SIGNATURE
 const SEGREDO = 'SUA_CHAVE_SUPER_SECRETA_E_UNICA_123';
 
 // Lista dos seus Addons
 const ADDONS = [
   'https://torrentio.strem.fun/brazuca',
-  'https://froststream.cloutteam.com',
+  'https://froststream.clouatteam.com',
   'https://comet.elfhosted.com',
-  'https://frostview.cloutteam.com',
+  'https://frostview.clouatteam.com',
   'https://cyberflix.1337x.b33p.club',
   'https://anime-kitsu.strem.fun'
 ];
 
+// Configuração de CORS e Desativação Total de Cache
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', '*');
+  
+  // Impede o celular do cliente de guardar em cache os links do Stremio
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  
   next();
 });
 
@@ -45,8 +53,8 @@ app.get('/manifest.json', verificarAcesso, (req, res) => {
   res.json({
     id: 'org.meustremio.multiproxy',
     version: '1.0.0',
-    name: 'Meu Proxy Multi-Addon (30 Dias)',
-    description: 'Proxy unificado com expiração de 30 dias',
+    name: 'Meu Proxy Multi-Addon',
+    description: 'Proxy unificado de streaming',
     resources: ['stream', 'catalog', 'meta'],
     types: ['movie', 'series', 'anime'],
     catalogs: []
