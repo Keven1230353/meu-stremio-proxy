@@ -5,13 +5,13 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Sua chave secreta
+// Sua chave secreta (deve ser a mesma do jwt.io)
 const SEGREDO = 'SUA_CHAVE_SUPER_SECRETA_E_UNICA_123';
 
 // Addons base configurados
 const ADDONS = [
   'https://torrentio.strem.fun/brazuca',
-  'https://froststream.clouatteam.com',
+  'https://froststream.cloudatteam.com',
   'https://comet.elfhosted.com',
   'https://cyberflix.1337x.b33p.club'
 ];
@@ -25,35 +25,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Validação de acesso com Log no Terminal para depuração
-function verificarAcesso(req, res, next) {
-  const token = req.params.token || req.query.token;
-
-  if (!token) {
-    console.log('❌ Requisição sem token negada.');
-    return res.json({ streams: [] });
-  }
-
-  try {
-    jwt.verify(token, SEGREDO);
-    console.log('✅ Token válido acessado!');
-    next();
-  } catch (err) {
-    console.log('❌ Token inválido ou expirado:', err.message);
-    return res.json({ streams: [] });
-  }
-}
-
-// 1. Rota do Manifest (Com idPrefixes obrigatório para o Stremio reconhecer os filmes)
-// 1. Rota do Manifest CORRIGIDA
+// 1. Rota do Manifest
 app.get('/:token/manifest.json', (req, res) => {
   const token = req.params.token;
 
-  // Validação rápida do JWT antes de entregar o Manifesto
+  // Validação rápida do JWT
   try {
     jwt.verify(token, SEGREDO);
   } catch (err) {
-    return res.status(401).json({ err: 'Token inválido' });
+    return res.status(401).json({ err: 'Token inválido ou expirado' });
   }
 
   res.json({
@@ -66,10 +46,20 @@ app.get('/:token/manifest.json', (req, res) => {
     idPrefixes: ['tt', 'kitsu'],
     catalogs: []
   });
+});
 
 // 2. Rota dos Streams
-app.get('/:token/stream/:type/:id.json', verificarAcesso, async (req, res) => {
+app.get('/:token/stream/:type/:id.json', async (req, res) => {
+  const token = req.params.token;
   const { type, id } = req.params;
+
+  // Validação do JWT
+  try {
+    jwt.verify(token, SEGREDO);
+  } catch (err) {
+    console.log('❌ Token inválido ou expirado na stream:', err.message);
+    return res.json({ streams: [] });
+  }
 
   const requests = ADDONS.map(async (baseUrl) => {
     try {
@@ -91,9 +81,9 @@ app.get('/:token/stream/:type/:id.json', verificarAcesso, async (req, res) => {
   try {
     const results = await Promise.all(requests);
     const allStreams = results.flat();
-    return res.json({ streams: allStreams });
+    res.json({ streams: allStreams });
   } catch (err) {
-    return res.json({ streams: [] });
+    res.json({ streams: [] });
   }
 });
 
