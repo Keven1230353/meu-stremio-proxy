@@ -90,3 +90,4 @@ app.get('/:token/stream/:type/:id.json', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor proxy rodando na porta ${PORT}`);
 });
+
