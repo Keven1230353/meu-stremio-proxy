@@ -5,24 +5,15 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CHAVE SECRETA (Use a mesma no jwt.io para assinar os tokens)
 const SEGREDO = 'SUA_CHAVE_SUPER_SECRETA_E_UNICA_123';
 
-// 🚀 OS MELHORES ADDONS UNIFICADOS (Filmes, Séries, Animes e TV ao Vivo)
+// Addons principais (URLs diretas e rápidas)
 const ADDONS = [
-  // Filmes e Séries (Dublado/Legendado/Nacional)
-  'https://torrentio.strem.fun/brazuca',
+  'https://torrentio.strem.fun',
   'https://froststream.cloudatteam.com',
-  'https://comet.elfhosted.com',
-  'https://cyberflix.1337x.b33p.club',
-  'https://thepiratebay.strem.fun',
-  // Animes
-  'https://animekitsu.strem.fun',
-  // TV ao Vivo e Canais
-  'https://frostview.cloudatteam.com'
+  'https://thepiratebay.strem.fun'
 ];
 
-// Anti-cache rigoroso para garantir que o corte por expiração seja imediato
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -31,42 +22,36 @@ app.use((req, res, next) => {
   next();
 });
 
-// 1. MANIFESTO DO PROXY
+// 1. MANIFESTO
 app.get('/:token/manifest.json', (req, res) => {
   res.json({
-    id: 'org.meustremio.superproxy',
-    version: '3.0.0',
+    id: 'org.meustremio.superproxy.v4', // ID atualizado para limpar o cache
+    version: '4.0.0',
     name: 'Super Proxy All-in-One',
-    description: 'Proxy unificado: Filmes, Séries, Animes e TV ao Vivo com corte por token',
-    resources: ['stream', 'catalog'],
+    description: 'Proxy unificado de streaming',
+    resources: ['stream'],
     types: ['movie', 'series', 'anime', 'tv'],
-    idPrefixes: ['tt', 'kitsu', 'tv'],
+    idPrefixes: ['tt', 'kitsu'],
     catalogs: []
   });
 });
 
-// 2. ROTA DE STREAMS (Validação de Tempo + União de Links)
+// 2. ROTA DE STREAMS COM RESPOSTA RÁPIDA (MAX 2 SEGUNDOS)
 app.get('/:token/stream/:type/:id.json', async (req, res) => {
-  const token = req.params.token;
-  const { type, id } = req.params;
+  const { token, type, id } = req.params;
 
-  // 🔒 BLOQUEIO POR TEMPO: Valida se o token expirou (Minutos, Horas, Dias ou Meses)
+  // Validação do Token JWT
   try {
-    const decoded = jwt.verify(token, SEGREDO);
-    console.log(`✅ Acesso autorizado | Usuário: ${decoded.user}`);
+    jwt.verify(token, SEGREDO);
   } catch (err) {
-    console.log('⛔ ACESSO BLOQUEADO / TOKEN EXPIRADO:', err.message);
-    // Retorna zero streams quando o tempo zera, cortando a exibição no Stremio
     return res.json({ streams: [] });
   }
 
-  console.log(`🔍 Buscando conteúdo [${type}] ID: ${id}`);
-
-  // Consulta todos os addons configurados em paralelo
-  const requests = ADDONS.map(async (baseUrl) => {
+  // Requisição paralela rápida com timeout severo de 1500ms
+  const fetchStreams = ADDONS.map(async (baseUrl) => {
     try {
       const response = await axios.get(`${baseUrl}/stream/${type}/${id}.json`, {
-        timeout: 4500, // Tempo limite rápido para o Stremio não dar timeout
+        timeout: 1500, // Força a resposta em no máximo 1.5s
         headers: { 'User-Agent': 'Mozilla/5.0' }
       });
       if (response.data && Array.isArray(response.data.streams)) {
@@ -79,8 +64,25 @@ app.get('/:token/stream/:type/:id.json', async (req, res) => {
   });
 
   try {
-    const results = await Promise.all(requests);
-    const allStreams = results.flat();
+    // Retorna o que estiver pronto imediatamente sem travar o Stremio
+    const results = await Promise.allSettled(fetchStreams);
+    const allStreams = results
+      .filter(r => r.status === 'fulfilled')
+      .flatMap(r => r.value);
+
+    // Se nenhum addon respondeu a tempo, envia um aviso interativo em vez de tela vazia
+    if (allStreams.length === 0) {
+      return res.json({
+        streams: [
+          {
+            name: 'Super Proxy',
+            title: '⚠️ Servidores ocupados no momento. Tente novamente em alguns segundos.',
+            url: 'https://localhost'
+          }
+        ]
+      });
+    }
+
     return res.json({ streams: allStreams });
   } catch (err) {
     return res.json({ streams: [] });
@@ -88,5 +90,5 @@ app.get('/:token/stream/:type/:id.json', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🔥 Super Proxy All-in-One rodando na porta ${PORT}`);
+  console.log(`🚀 Servidor otimizado rodando na porta ${PORT}`);
 });
