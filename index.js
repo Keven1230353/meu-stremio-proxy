@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Sua chave secreta (mantenha exatamente essa no jwt.io no campo VERIFY SIGNATURE)
+// Sua chave secreta
 const SEGREDO = 'SUA_CHAVE_SUPER_SECRETA_E_UNICA_123';
 
 // Lista dos Addons
@@ -18,7 +18,7 @@ const ADDONS = [
   'https://anime-kitsu.strem.fun'
 ];
 
-// Anti-cache e liberação de CORS
+// Anti-cache e CORS
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', '*');
@@ -28,24 +28,24 @@ app.use((req, res, next) => {
   next();
 });
 
-// Validação do Token JWT
-function verificarAcesso(req, res, next) {
-  const token = req.params.token || req.query.token;
+// Função de validação para as rotas de stream
+function verificarAcessoStream(req, res, next) {
+  const token = req.query.token;
 
   if (!token) {
-    return res.json({ streams: [] });
+    return res.json({ streams: [] }); // Bloqueia se não tiver token
   }
 
   try {
     jwt.verify(token, SEGREDO);
-    next();
+    next(); // Token válido, deixa passar
   } catch (err) {
-    return res.json({ streams: [] });
+    return res.json({ streams: [] }); // Token vencido ou inválido, bloqueia
   }
 }
 
-// Rota do Manifest (Aceita o token direto no caminho da URL)
-app.get('/:token/manifest.json', verificarAcesso, (req, res) => {
+// 1. O Manifest fica limpo e acessível para o Stremio carregar sempre
+app.get('/manifest.json', (req, res) => {
   res.json({
     id: 'org.meustremio.multiproxy',
     version: '1.0.0',
@@ -57,8 +57,8 @@ app.get('/:token/manifest.json', verificarAcesso, (req, res) => {
   });
 });
 
-// Rota dos Vídeos/Streams (Recebe e valida o mesmo token)
-app.get('/:token/stream/:type/:id.json', verificarAcesso, async (req, res) => {
+// 2. A segurança real acontece na hora que o usuário clica no filme (passando o token na query)
+app.get('/stream/:type/:id.json', verificarAcessoStream, async (req, res) => {
   const { type, id } = req.params;
   let allStreams = [];
 
@@ -85,4 +85,3 @@ app.get('/:token/stream/:type/:id.json', verificarAcesso, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor proxy rodando na porta ${PORT}`);
 });
-
