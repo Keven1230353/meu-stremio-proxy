@@ -5,15 +5,20 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Sua chave secreta (deve ser a mesma usada no jwt.io)
 const SEGREDO = 'SUA_CHAVE_SUPER_SECRETA_E_UNICA_123';
 
-// Addons principais (URLs diretas e rápidas)
+// Lista dos 6 Addons Unificados
 const ADDONS = [
-  'https://torrentio.strem.fun',
+  'https://torrentio.strem.fun/brazuca',
   'https://froststream.cloudatteam.com',
-  'https://thepiratebay.strem.fun'
+  'https://comet.elfhosted.com',
+  'https://cyberflix.1337x.b33p.club',
+  'https://thepiratebay.strem.fun',
+  'https://frostview.cloudatteam.com'
 ];
 
+// Anti-cache e liberação de CORS
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -22,36 +27,37 @@ app.use((req, res, next) => {
   next();
 });
 
-// 1. MANIFESTO
+// 1. MANIFESTO COM NOVO ID (org.meustremio.superproxy.v5)
 app.get('/:token/manifest.json', (req, res) => {
   res.json({
-    id: 'org.meustremio.superproxy.v4', // ID atualizado para limpar o cache
-    version: '4.0.0',
+    id: 'org.meustremio.superproxy.v5',
+    version: '5.0.0',
     name: 'Super Proxy All-in-One',
-    description: 'Proxy unificado de streaming',
+    description: 'Proxy unificado de streaming (Filmes, Séries, Animes e TV ao Vivo)',
     resources: ['stream'],
     types: ['movie', 'series', 'anime', 'tv'],
-    idPrefixes: ['tt', 'kitsu'],
+    idPrefixes: ['tt', 'kitsu', 'tv'],
     catalogs: []
   });
 });
 
-// 2. ROTA DE STREAMS COM RESPOSTA RÁPIDA (MAX 2 SEGUNDOS)
+// 2. ROTA DE STREAMS COM RESPOSTA RÁPIDA (TIMEOUT DE 1.8s)
 app.get('/:token/stream/:type/:id.json', async (req, res) => {
   const { token, type, id } = req.params;
 
-  // Validação do Token JWT
+  // Validação do Token JWT (Corta o acesso se estiver expirado)
   try {
     jwt.verify(token, SEGREDO);
   } catch (err) {
+    console.log('⛔ Token expirado ou inválido!');
     return res.json({ streams: [] });
   }
 
-  // Requisição paralela rápida com timeout severo de 1500ms
+  // Requisições paralelas rápidas para não estourar o tempo limite do Stremio
   const fetchStreams = ADDONS.map(async (baseUrl) => {
     try {
       const response = await axios.get(`${baseUrl}/stream/${type}/${id}.json`, {
-        timeout: 1500, // Força a resposta em no máximo 1.5s
+        timeout: 1800, // Limite de 1.8 segundos por addon
         headers: { 'User-Agent': 'Mozilla/5.0' }
       });
       if (response.data && Array.isArray(response.data.streams)) {
@@ -64,24 +70,10 @@ app.get('/:token/stream/:type/:id.json', async (req, res) => {
   });
 
   try {
-    // Retorna o que estiver pronto imediatamente sem travar o Stremio
     const results = await Promise.allSettled(fetchStreams);
     const allStreams = results
       .filter(r => r.status === 'fulfilled')
       .flatMap(r => r.value);
-
-    // Se nenhum addon respondeu a tempo, envia um aviso interativo em vez de tela vazia
-    if (allStreams.length === 0) {
-      return res.json({
-        streams: [
-          {
-            name: 'Super Proxy',
-            title: '⚠️ Servidores ocupados no momento. Tente novamente em alguns segundos.',
-            url: 'https://localhost'
-          }
-        ]
-      });
-    }
 
     return res.json({ streams: allStreams });
   } catch (err) {
@@ -90,5 +82,5 @@ app.get('/:token/stream/:type/:id.json', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor otimizado rodando na porta ${PORT}`);
+  console.log(`🚀 Super Proxy v5 rodando na porta ${PORT}`);
 });
