@@ -5,10 +5,8 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Sua chave secreta
 const SEGREDO = 'SUA_CHAVE_SUPER_SECRETA_E_UNICA_123';
 
-// Lista dos Addons
 const ADDONS = [
   'https://torrentio.strem.fun/brazuca',
   'https://froststream.clouatteam.com',
@@ -18,7 +16,6 @@ const ADDONS = [
   'https://anime-kitsu.strem.fun'
 ];
 
-// Anti-cache e CORS
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', '*');
@@ -28,24 +25,23 @@ app.use((req, res, next) => {
   next();
 });
 
-// Função de validação para as rotas de stream
-function verificarAcessoStream(req, res, next) {
-  const token = req.query.token;
+function verificarAcesso(req, res, next) {
+  const token = req.params.token || req.query.token;
 
   if (!token) {
-    return res.json({ streams: [] }); // Bloqueia se não tiver token
+    return res.json({ streams: [] });
   }
 
   try {
     jwt.verify(token, SEGREDO);
-    next(); // Token válido, deixa passar
+    next();
   } catch (err) {
-    return res.json({ streams: [] }); // Token vencido ou inválido, bloqueia
+    return res.json({ streams: [] });
   }
 }
 
-// 1. O Manifest fica limpo e acessível para o Stremio carregar sempre
-app.get('/manifest.json', (req, res) => {
+// O token fica no caminho da URL
+app.get('/:token/manifest.json', verificarAcesso, (req, res) => {
   res.json({
     id: 'org.meustremio.multiproxy',
     version: '1.0.0',
@@ -57,8 +53,7 @@ app.get('/manifest.json', (req, res) => {
   });
 });
 
-// 2. A segurança real acontece na hora que o usuário clica no filme (passando o token na query)
-app.get('/stream/:type/:id.json', verificarAcessoStream, async (req, res) => {
+app.get('/:token/stream/:type/:id.json', verificarAcesso, async (req, res) => {
   const { type, id } = req.params;
   let allStreams = [];
 
