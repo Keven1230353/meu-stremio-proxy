@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Sua chave secreta (deve ser a mesma do jwt.io)
+// Sua chave secreta idêntica à do jwt.io
 const SEGREDO = 'SUA_CHAVE_SUPER_SECRETA_E_UNICA_123';
 
 // Addons base configurados
@@ -16,7 +16,7 @@ const ADDONS = [
   'https://cyberflix.1337x.b33p.club'
 ];
 
-// Anti-cache e liberação de CORS
+// Anti-cache rigoroso para garantir que a expiração seja instantânea
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -25,22 +25,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// 1. Rota do Manifest
+// 1. Rota do Manifest (Sempre carrega o Addon no Stremio)
 app.get('/:token/manifest.json', (req, res) => {
-  const token = req.params.token;
-
-  // Validação rápida do JWT
-  try {
-    jwt.verify(token, SEGREDO);
-  } catch (err) {
-    return res.status(401).json({ err: 'Token inválido ou expirado' });
-  }
-
   res.json({
     id: 'org.meustremio.multiproxy',
     version: '1.0.0',
     name: 'Meu Proxy Multi-Addon',
-    description: 'Proxy unificado de streaming',
+    description: 'Proxy unificado de streaming com bloqueio por tempo',
     resources: ['stream'],
     types: ['movie', 'series', 'anime'],
     idPrefixes: ['tt', 'kitsu'],
@@ -48,19 +39,21 @@ app.get('/:token/manifest.json', (req, res) => {
   });
 });
 
-// 2. Rota dos Streams
+// 2. Rota dos Streams (Valida o tempo do token e corta o sinal se expirar)
 app.get('/:token/stream/:type/:id.json', async (req, res) => {
   const token = req.params.token;
   const { type, id } = req.params;
 
-  // Validação do JWT
+  // Validação estrita do JWT com verificação de tempo
   try {
     jwt.verify(token, SEGREDO);
   } catch (err) {
-    console.log('❌ Token inválido ou expirado na stream:', err.message);
+    console.log('⛔ ACESSO NEGADO / EXPIRADO:', err.message);
+    // Retorna zero opções de filmes assim que o token expira
     return res.json({ streams: [] });
   }
 
+  // Se o token estiver VÁLIDO, busca os streams nos addons
   const requests = ADDONS.map(async (baseUrl) => {
     try {
       const response = await axios.get(`${baseUrl}/stream/${type}/${id}.json`, {
@@ -90,4 +83,3 @@ app.get('/:token/stream/:type/:id.json', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor proxy rodando na porta ${PORT}`);
 });
-
