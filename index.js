@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 // Sua chave secreta idêntica à do jwt.io
 const SEGREDO = 'SUA_CHAVE_SUPER_SECRETA_E_UNICA_123';
 
-// Addons base configurados
+// Addons base configurados (com as URLs limpas)
 const ADDONS = [
   'https://torrentio.strem.fun/brazuca',
   'https://froststream.cloudatteam.com',
@@ -16,7 +16,7 @@ const ADDONS = [
   'https://cyberflix.1337x.b33p.club'
 ];
 
-// Anti-cache rigoroso para garantir que a expiração seja instantânea
+// Anti-cache e liberação de CORS
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -25,13 +25,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// 1. Rota do Manifest (Sempre carrega o Addon no Stremio)
+// 1. Rota do Manifest
 app.get('/:token/manifest.json', (req, res) => {
   res.json({
     id: 'org.meustremio.multiproxy',
-    version: '1.0.0',
+    version: '1.0.1',
     name: 'Meu Proxy Multi-Addon',
-    description: 'Proxy unificado de streaming com bloqueio por tempo',
+    description: 'Proxy unificado de streaming',
     resources: ['stream'],
     types: ['movie', 'series', 'anime'],
     idPrefixes: ['tt', 'kitsu'],
@@ -39,33 +39,40 @@ app.get('/:token/manifest.json', (req, res) => {
   });
 });
 
-// 2. Rota dos Streams (Valida o tempo do token e corta o sinal se expirar)
+// 2. Rota dos Streams (Com tratamento robusto para o Stremio exibir sempre)
 app.get('/:token/stream/:type/:id.json', async (req, res) => {
   const token = req.params.token;
   const { type, id } = req.params;
 
   // Validação estrita do JWT com verificação de tempo
   try {
-    jwt.verify(token, SEGREDO);
+    const decoded = jwt.verify(token, SEGREDO);
+    console.log(`✅ Acesso autorizado para o usuário: ${decoded.user}`);
   } catch (err) {
-    console.log('⛔ ACESSO NEGADO / EXPIRADO:', err.message);
-    // Retorna zero opções de filmes assim que o token expira
+    console.log('⛔ Token inválido ou expirado:', err.message);
+    // Retorna streams vazios se expirou
     return res.json({ streams: [] });
   }
 
-  // Se o token estiver VÁLIDO, busca os streams nos addons
+  console.log(`🔍 Buscando streams para -> Tipo: ${type}, ID: ${id}`);
+
+  // Faz as requisições para todos os addons em paralelo
   const requests = ADDONS.map(async (baseUrl) => {
     try {
-      const response = await axios.get(`${baseUrl}/stream/${type}/${id}.json`, {
-        timeout: 5000,
+      const targetUrl = `${baseUrl}/stream/${type}/${id}.json`;
+      const response = await axios.get(targetUrl, {
+        timeout: 6000,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         }
       });
+      
       if (response.data && Array.isArray(response.data.streams)) {
+        console.log(`✔ Sucesso de ${baseUrl}: ${response.data.streams.length} links encontrados.`);
         return response.data.streams;
       }
     } catch (e) {
+      console.log(`⚠️ Erro ao consultar ${baseUrl}:`, e.message);
       return [];
     }
     return [];
@@ -74,9 +81,13 @@ app.get('/:token/stream/:type/:id.json', async (req, res) => {
   try {
     const results = await Promise.all(requests);
     const allStreams = results.flat();
-    res.json({ streams: allStreams });
+    console.log(`📦 Total geral de streams combinados: ${allStreams.length}`);
+    
+    // Retorna o JSON no formato exato que o Stremio exige
+    return res.json({ streams: allStreams });
   } catch (err) {
-    res.json({ streams: [] });
+    console.log('❌ Erro geral ao processar streams:', err.message);
+    return res.json({ streams: [] });
   }
 });
 
