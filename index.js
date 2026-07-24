@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Sua chave secreta
 const SEGREDO = 'SUA_CHAVE_SUPER_SECRETA_E_UNICA_123';
 
 // Addons base configurados
@@ -15,7 +16,7 @@ const ADDONS = [
   'https://cyberflix.1337x.b33p.club'
 ];
 
-// Anti-cache e liberação total de CORS para a API do Stremio
+// Anti-cache e liberação de CORS
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -24,23 +25,26 @@ app.use((req, res, next) => {
   next();
 });
 
-// Validador de Token JWT
+// Validação de acesso com Log no Terminal para depuração
 function verificarAcesso(req, res, next) {
   const token = req.params.token || req.query.token;
 
   if (!token) {
+    console.log('❌ Requisição sem token negada.');
     return res.json({ streams: [] });
   }
 
   try {
     jwt.verify(token, SEGREDO);
+    console.log('✅ Token válido acessado!');
     next();
   } catch (err) {
+    console.log('❌ Token inválido ou expirado:', err.message);
     return res.json({ streams: [] });
   }
 }
 
-// 1. Rota do Manifest
+// 1. Rota do Manifest (Com idPrefixes obrigatório para o Stremio reconhecer os filmes)
 app.get('/:token/manifest.json', verificarAcesso, (req, res) => {
   res.json({
     id: 'org.meustremio.multiproxy',
@@ -49,20 +53,22 @@ app.get('/:token/manifest.json', verificarAcesso, (req, res) => {
     description: 'Proxy unificado de streaming',
     resources: ['stream'],
     types: ['movie', 'series', 'anime'],
+    idPrefixes: ['tt', 'kitsu'], // OBRIGATÓRIO: indica os IDs do IMDb/Kitsu
     catalogs: []
   });
 });
 
-// 2. Rota dos Streams (com busca paralela rápida e tratamento de erros)
+// 2. Rota dos Streams
 app.get('/:token/stream/:type/:id.json', verificarAcesso, async (req, res) => {
   const { type, id } = req.params;
 
   const requests = ADDONS.map(async (baseUrl) => {
     try {
-      // Timeout de 4 segundos por addon para evitar travamento no Stremio
       const response = await axios.get(`${baseUrl}/stream/${type}/${id}.json`, {
-        timeout: 4000,
-        headers: { 'User-Agent': 'Mozilla/5.0' }
+        timeout: 5000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        }
       });
       if (response.data && Array.isArray(response.data.streams)) {
         return response.data.streams;
