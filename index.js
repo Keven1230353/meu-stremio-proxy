@@ -45,7 +45,17 @@ function verificarAcesso(req, res, next) {
 }
 
 // 1. Rota do Manifest (Com idPrefixes obrigatório para o Stremio reconhecer os filmes)
-app.get('/:token/manifest.json', verificarAcesso, (req, res) => {
+// 1. Rota do Manifest CORRIGIDA
+app.get('/:token/manifest.json', (req, res) => {
+  const token = req.params.token;
+
+  // Validação rápida do JWT antes de entregar o Manifesto
+  try {
+    jwt.verify(token, SEGREDO);
+  } catch (err) {
+    return res.status(401).json({ err: 'Token inválido' });
+  }
+
   res.json({
     id: 'org.meustremio.multiproxy',
     version: '1.0.0',
@@ -53,10 +63,9 @@ app.get('/:token/manifest.json', verificarAcesso, (req, res) => {
     description: 'Proxy unificado de streaming',
     resources: ['stream'],
     types: ['movie', 'series', 'anime'],
-    idPrefixes: ['tt', 'kitsu'], // OBRIGATÓRIO: indica os IDs do IMDb/Kitsu
+    idPrefixes: ['tt', 'kitsu'],
     catalogs: []
   });
-});
 
 // 2. Rota dos Streams
 app.get('/:token/stream/:type/:id.json', verificarAcesso, async (req, res) => {
