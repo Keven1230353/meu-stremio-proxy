@@ -5,11 +5,10 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// DEFINA UMA SENHA SECRETA PARA O SEU TOKEN
-// Lembre-se de usar exatamente essa mesma palavra no jwt.io no campo VERIFY SIGNATURE
+// Sua chave secreta (mantenha exatamente essa no jwt.io no campo VERIFY SIGNATURE)
 const SEGREDO = 'SUA_CHAVE_SUPER_SECRETA_E_UNICA_123';
 
-// Lista dos seus Addons
+// Lista dos Addons
 const ADDONS = [
   'https://torrentio.strem.fun/brazuca',
   'https://froststream.clouatteam.com',
@@ -19,22 +18,19 @@ const ADDONS = [
   'https://anime-kitsu.strem.fun'
 ];
 
-// Configuração de CORS e Desativação Total de Cache
+// Anti-cache e liberação de CORS
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', '*');
-  
-  // Impede o celular do cliente de guardar em cache os links do Stremio
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
-  
   next();
 });
 
-// Checa a validação e expiração do Token
+// Validação do Token JWT
 function verificarAcesso(req, res, next) {
-  const token = req.query.token;
+  const token = req.params.token || req.query.token;
 
   if (!token) {
     return res.json({ streams: [] });
@@ -44,12 +40,12 @@ function verificarAcesso(req, res, next) {
     jwt.verify(token, SEGREDO);
     next();
   } catch (err) {
-    // Retorna a lista vazia para o Stremio entender o bloqueio na hora
     return res.json({ streams: [] });
   }
 }
 
-app.get('/manifest.json', verificarAcesso, (req, res) => {
+// Rota do Manifest (Aceita o token direto no caminho da URL)
+app.get('/:token/manifest.json', verificarAcesso, (req, res) => {
   res.json({
     id: 'org.meustremio.multiproxy',
     version: '1.0.0',
@@ -61,7 +57,8 @@ app.get('/manifest.json', verificarAcesso, (req, res) => {
   });
 });
 
-app.get('/stream/:type/:id.json', verificarAcesso, async (req, res) => {
+// Rota dos Vídeos/Streams (Recebe e valida o mesmo token)
+app.get('/:token/stream/:type/:id.json', verificarAcesso, async (req, res) => {
   const { type, id } = req.params;
   let allStreams = [];
 
@@ -88,3 +85,4 @@ app.get('/stream/:type/:id.json', verificarAcesso, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor proxy rodando na porta ${PORT}`);
 });
+
